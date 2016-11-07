@@ -4,6 +4,7 @@ library(dplyr)
 library(ggplot2)
 library(data.table)
 library(tidyr)
+library(scales)
 #set workspace and verify
 setwd("Desktop/Austin_Realty")
 getwd()
@@ -41,16 +42,16 @@ head(ACS2014, n=3)
 
 #Change Headers for all ACS .csv Files
 names(ACS2011) <- c("Geoid1", "ZipCode", "TotalEstHH2011", "MedIncomeHH2011")
-  head(ACS2011,n=5)
+head(ACS2011,n=5)
 
 names(ACS2012) <- c("Geoid1", "ZipCode", "TotalEstHH2012", "MedIncomeHH2012")
-  head(ACS2012,n=5)
+head(ACS2012,n=5)
 
 names(ACS2013) <- c("Geoid1", "ZipCode", "TotalEstHH2013", "MedIncomeHH2013")
-  head(ACS2013,n=5)
+head(ACS2013,n=5)
 
 names(ACS2014) <- c("Geoid1", "ZipCode", "TotalEstHH2014", "MedIncomeHH2014")
-  head(ACS2014,n=5)
+head(ACS2014,n=5)
 
 #Join ACS time series dataframes into a single dataframe called ACStotal
 
@@ -154,15 +155,14 @@ CityRent2Own <- mutate(CityRent2Own, RentOwn2014 = (Own2014 / (12 * Rent2014)))
 CityRent2Own <- mutate(CityRent2Own, RentOwn2015 = (Own2015 / (12 * Rent2015)))
 head(CityRent2Own,n=5)
 
-
 #ggplot2 - Graph findings by city
 
 #Graph 1 - Gather CityOwn df then plot City Ownership (CityOwnGather df)
 #gather CityOwn df
 head(CityOwn,n=18)
 CityOwnGather <- CityOwn %>%
-  gather(Type, Value, Own2011:Own2015)
-head(CityOwnGather,n=5)
+  gather(CityOwn, Value, Own2011:Own2015)
+head(CityOwnGather,n=15)
 
 #split Own#### column into Type, Year Columns
 CityOwnGather<-CityOwnGather %>%
@@ -180,7 +180,7 @@ min(CityOwnGather$HomeValue)
 max(CityOwnGather$HomeValue)
 
 #Create ggplot for City Ownership (CityOwnGather df)
-ggplot(data=CityOwnGather,
+ggplot(CityOwnGather,
        aes(x=Year, y=HomeValue, color=City, group=City))+
         geom_line()+
         geom_point()+
@@ -212,7 +212,7 @@ min(CityRentGather$RentValue)
 max(CityRentGather$RentValue)
 
 #Create ggplot for City Rent (CityRentGather df)
-ggplot(data=CityRentGather,
+ggplot(CityRentGather,
        aes(x=Year, y=RentValue, color=City, group=City))+
   geom_line()+
   geom_point()+
@@ -243,7 +243,7 @@ min(CityMedIncomeGather$Income)
 max(CityMedIncomeGather$Income)
 
 #Create ggplot for ACS Income Values (ACSGather df)
-ggplot(data=CityMedIncomeGather,
+ggplot(CityMedIncomeGather,
        aes(x=Year, y=Income, color=City, group=City))+
   geom_line()+
   geom_point()+
@@ -270,7 +270,7 @@ min(CityRent2OwnGather$Rent2Own)
 max(CityRent2OwnGather$Rent2Own)
 
 #Create ggplot for City Rent-to-Own (CityRent2Own df)
-ggplot(data=CityRent2OwnGather,
+ggplot(CityRent2OwnGather,
        aes(x=Year, y=Rent2Own, color=City, group=City))+
   geom_line()+
   geom_point()+
@@ -278,11 +278,66 @@ ggplot(data=CityRent2OwnGather,
   ggtitle("Austin Metro Rent-to-Own Ratio (Zillow 2011-2015)")+
   labs(x="Year",y="Rent to Own Ratio")
 
-#Graph 5 - Create Rent vs Income
-
-#Graph 6 - Create Own vs Income
-
-#Graph 7 - Create Graph of Rent to Own vs Income
-
 #Regression model
+#Use 2011 to 2014 data only
 
+#Limit Ownership data to 2011 to 2014
+CityOwn11t14 <- CityOwn 
+CityOwn11t14$Own2015<-NULL
+CityOwn11t14
+
+#Gather for 2011-2014
+CityOwnGather11t14 <- CityOwn11t14 %>%
+  gather(Type, Own, Own2011:Own2014)
+head(CityOwnGather11t14,n=15)
+
+#Split columns
+CityOwnGather11t14<-CityOwnGather11t14 %>%
+  separate(Type, c("Type", "Year"), "Own")
+CityOwnGather11t14$Type<-"Own"
+head(CityOwnGather11t14,n=5)
+
+#Rename Headers
+names(CityOwnGather11t14) <- c("City", "Type", "Year", "HomeValue")
+head(CityOwnGather11t14,n=5)
+
+#Combine City and Year Columns
+CityOwnGather11t14Unite<-unite(CityOwnGather11t14,"CityYr",City,Year,sep = "",remove = FALSE)
+head(CityOwnGather11t14Unite,n=5)
+
+#Combine City and Year Columns
+head(CityMedIncomeGather,n=5)
+CityMedIncomeGatherUnite<-unite(CityMedIncomeGather,"CityYr",City,Year,sep = "",remove = FALSE)
+head(CityMedIncomeGatherUnite,n=5)
+
+
+#join City Med Income and Own data by CityYr
+Income.Own <- full_join(CityMedIncomeGatherUnite, CityOwnGather11t14Unite, by="CityYr")
+Income.Own$City.x<-Income.Own$Type.x<-Income.Own$Type.y<-Income.Own$Year.x<-NULL
+names(Income.Own) <- c("CityYr", "Income", "City", "Year","HomeValue")
+Income.Own.stats<-lm(Income ~ HomeValue, data = Income.Own)
+summary(Income.Own.stats)
+plot(Income.Own.stats)
+
+#Join City Rent Data
+#Make matching ID
+CityRentGatherUnite<-unite(CityRentGather,"CityYr",City,Year,sep = "",remove = FALSE)
+CityRentGatherUnite$City<-CityRentGatherUnite$Type<-CityRentGatherUnite$Year<-NULL
+
+#join CityRentGatherUnite with Income.Own 
+Income.Own.Rent <- full_join(Income.Own, CityRentGatherUnite, by="CityYr")
+Income.Own.Rent$RentPerYr<-Income.Own.Rent$RentValue*12
+Income.Own.Rent$IncomeRentPct<-Income.Own.Rent$RentPerYr/Income.Own.Rent$Income*100
+GraphIOW<-Income.Own.Rent
+ggplot(Income.Own.Rent,
+       aes(x=Year, y=IncomeRentPct, color=City, group=City))+
+  geom_line()+
+  geom_point()+
+  scale_y_continuous(limits = c(15, 40))+
+  ggtitle("Austin Metro Income vs Yearly Rent")+
+  labs(x="Year",y="Yearly Rent vs Income in %")
+
+#Regressions for Rent
+Income.Own.Rent.stats<-lm(Income ~ RentPerYr, data = Income.Own.Rent)
+summary(Income.Own.Rent.stats)
+plot(Income.Own.Rent.stats)
